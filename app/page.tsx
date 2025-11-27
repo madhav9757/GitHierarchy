@@ -1,165 +1,93 @@
-"use client";
+// app/page.tsx
+'use client';
 
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronRight, ChevronDown, Folder, File } from "lucide-react";
+import { useState } from 'react';
+// ❌ REMOVE: import { fetchUserRepos } from '@/lib/superfaceGit'; // REMOVE THIS IMPORT
+import SearchBar from '@/components/SearchBar'; 
+import RepoCard from '@/components/RepoCard'; 
 
-type GitTreeItem = {
-  path: string;
-  type: "blob" | "tree";
-};
+// Note: This interface must match the structure returned by the API Route
+interface RepoData {
+  name: string;
+  description?: string;
+  url?: string;
+}
 
-export default function Page() {
-  const [username, setUsername] = useState("");
+export default function HomePage() {
+  const [username, setUsername] = useState('');
+  const [repoData, setRepoData] = useState<RepoData[]>([]); 
   const [loading, setLoading] = useState(false);
-  const [repos, setRepos] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchHierarchy = async () => {
-    if (!username.trim()) return;
-
-    setLoading(true);
+  const handleSearch = async () => {
+    if (!username.trim()) {
+      setError("Please enter a valid GitHub username.");
+      setRepoData([]);
+      return;
+    }
+    
     setError(null);
-    setRepos(null);
+    setLoading(true);
+    setRepoData([]);
 
     try {
-      // Fetch repositories
-      const reposRes = await fetch(`https://api.github.com/users/${username}/repos`);
-      const reposJson = await reposRes.json();
-
-      if (!Array.isArray(reposJson)) {
-        throw new Error("Invalid username");
+      // 1. Fetch repos by calling the new API Route
+      const res = await fetch(`/api/repos/${username}`);
+      
+      if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      
+      if (!data?.repos || !Array.isArray(data.repos)) {
+          throw new Error("Invalid response from repository API.");
       }
 
-      const allRepos: any = {};
+      setRepoData(data.repos as RepoData[]); 
 
-      // Fetch tree structure
-      for (const repo of reposJson) {
-        const repoName = repo.name;
-
-        const treeRes = await fetch(
-          `https://api.github.com/repos/${username}/${repoName}/git/trees/${repo.default_branch || "main"}?recursive=1`
-        );
-
-        const treeJson = await treeRes.json();
-        if (!treeJson.tree) continue;
-
-        const tree = treeJson.tree as GitTreeItem[];
-
-        // Convert to nested object
-        const root: any = {};
-        tree.forEach((item) => {
-          const parts = item.path.split("/");
-          let current = root;
-
-          parts.forEach((p, index) => {
-            if (!current[p]) {
-              current[p] = {
-                __type__: index === parts.length - 1 ? item.type : "tree",
-                __children__: {},
-              };
-            }
-            current = current[p].__children__;
-          });
-        });
-
-        allRepos[repoName] = root;
-      }
-
-      setRepos(allRepos);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Failed to fetch repositories.');
+      setRepoData([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Recursive folder renderer
-  const renderTree = (node: any, indent = 0) => {
-    return Object.keys(node).map((key) => {
-      const item = node[key];
-      const isFolder = item.__type__ === "tree";
-
-      return (
-        <Collapsible key={key} className="ml-4">
-          <CollapsibleTrigger className="flex items-center gap-2 cursor-pointer py-1">
-            {isFolder ? (
-              <>
-                <ChevronRight className="w-4 h-4 data-[state=open]:hidden" />
-                <ChevronDown className="w-4 h-4 hidden data-[state=open]:block" />
-                <Folder className="w-4 h-4 text-yellow-600" />
-              </>
-            ) : (
-              <>
-                <File className="w-4 h-4 text-muted-foreground" />
-              </>
-            )}
-
-            <span className="text-sm">{key}</span>
-          </CollapsibleTrigger>
-
-          {isFolder && (
-            <CollapsibleContent className="ml-4 border-l pl-4">
-              {renderTree(item.__children__, indent + 1)}
-            </CollapsibleContent>
-          )}
-        </Collapsible>
-      );
-    });
-  };
-
   return (
-    <div className="max-w-3xl mx-auto py-16 px-4">
-      <h1 className="text-3xl font-semibold tracking-tight mb-6 text-center">
-        GitHub Repo Explorer
-      </h1>
+    <div className="p-10 flex flex-col gap-6 max-w-4xl mx-auto">
+      <h1 className="text-3xl font-bold text-center">GitHub Repo Structure Viewer</h1>
+      
+      <SearchBar
+        username={username}
+        setUsername={setUsername}
+        onSearch={handleSearch}
+        loading={loading}
+      />
 
-      <Card className="shadow-sm border-[1.5px]">
-        <CardHeader>
-          <CardTitle className="text-xl">Search GitHub User</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-3">
-            <Input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter GitHub username"
-              className="h-11"
+      {error && (
+        <p className="text-center text-red-500 font-medium">{error}</p>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {repoData.length > 0 ? (
+          repoData.map((repo) => (
+            <RepoCard
+              key={repo.name} 
+              username={username}
+              repoName={repo.name}
+              description={repo.description} 
             />
-            <Button onClick={fetchHierarchy} className="h-11 px-6" disabled={loading}>
-              {loading ? "Fetching..." : "Search"}
-            </Button>
-          </div>
-
-          {error && <p className="text-red-500 mt-4">{error}</p>}
-        </CardContent>
-      </Card>
-
-      {/* Repos Section */}
-      {repos && (
-        <div className="mt-10 space-y-6">
-          {Object.keys(repos).map((repoName) => (
-            <Card key={repoName} className="border-[1.5px] shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex gap-2 items-center text-lg">
-                  📦 {repoName}
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent>{renderTree(repos[repoName])}</CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {loading && (
-        <p className="mt-6 text-center text-muted-foreground animate-pulse">
-          Fetching repo structures...
-        </p>
-      )}
+          ))
+        ) : (
+          !loading && !error && (
+            <p className="text-center col-span-full text-gray-500">
+              Start by searching for a GitHub username.
+            </p>
+          )
+        )}
+      </div>
     </div>
   );
 }
