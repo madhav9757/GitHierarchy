@@ -1,16 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronRight, ChevronDown, Folder, File } from "lucide-react";
 
 type GitTreeItem = {
   path: string;
   type: "blob" | "tree";
 };
 
-export default function Home() {
+export default function Page() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any>(null);
+  const [repos, setRepos] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchHierarchy = async () => {
@@ -18,48 +23,42 @@ export default function Home() {
 
     setLoading(true);
     setError(null);
-    setData(null);
+    setRepos(null);
 
     try {
-      // 1. Fetch Repos
-      const reposRes = await fetch(
-        `https://api.github.com/users/${username}/repos`
-      );
-      const repos = await reposRes.json();
+      // Fetch repositories
+      const reposRes = await fetch(`https://api.github.com/users/${username}/repos`);
+      const reposJson = await reposRes.json();
 
-      if (!Array.isArray(repos)) {
+      if (!Array.isArray(reposJson)) {
         throw new Error("Invalid username");
       }
 
-      const result: any = {};
+      const allRepos: any = {};
 
-      // 2. Fetch file tree for each repo
-      for (const repo of repos) {
+      // Fetch tree structure
+      for (const repo of reposJson) {
         const repoName = repo.name;
 
         const treeRes = await fetch(
-          `https://api.github.com/repos/${username}/${repoName}/git/trees/${
-            repo.default_branch || "main"
-          }?recursive=1`
+          `https://api.github.com/repos/${username}/${repoName}/git/trees/${repo.default_branch || "main"}?recursive=1`
         );
 
-        const treeData = await treeRes.json();
+        const treeJson = await treeRes.json();
+        if (!treeJson.tree) continue;
 
-        if (!treeData.tree) continue;
+        const tree = treeJson.tree as GitTreeItem[];
 
-        const tree = treeData.tree as GitTreeItem[];
-
-        // Convert paths into nested structure
+        // Convert to nested object
         const root: any = {};
-
         tree.forEach((item) => {
           const parts = item.path.split("/");
           let current = root;
 
-          parts.forEach((p, i) => {
+          parts.forEach((p, index) => {
             if (!current[p]) {
               current[p] = {
-                __type__: i === parts.length - 1 ? item.type : "tree",
+                __type__: index === parts.length - 1 ? item.type : "tree",
                 __children__: {},
               };
             }
@@ -67,92 +66,99 @@ export default function Home() {
           });
         });
 
-        result[repoName] = root;
+        allRepos[repoName] = root;
       }
 
-      setData(result);
+      setRepos(allRepos);
     } catch (err: any) {
-      setError(err.message || "Something went wrong");
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
-  // Recursive Renderer
-  const renderTree = (node: any, level = 0) => {
+  // Recursive folder renderer
+  const renderTree = (node: any, indent = 0) => {
     return Object.keys(node).map((key) => {
       const item = node[key];
       const isFolder = item.__type__ === "tree";
 
       return (
-        <div key={key} style={{ marginLeft: level * 16 }}>
-          <details>
-            <summary>
-              {isFolder ? "📁 " : "📄 "}
-              {key}
-            </summary>
+        <Collapsible key={key} className="ml-4">
+          <CollapsibleTrigger className="flex items-center gap-2 cursor-pointer py-1">
+            {isFolder ? (
+              <>
+                <ChevronRight className="w-4 h-4 data-[state=open]:hidden" />
+                <ChevronDown className="w-4 h-4 hidden data-[state=open]:block" />
+                <Folder className="w-4 h-4 text-yellow-600" />
+              </>
+            ) : (
+              <>
+                <File className="w-4 h-4 text-muted-foreground" />
+              </>
+            )}
 
-            {isFolder &&
-              renderTree(item.__children__, level + 1)}
-          </details>
-        </div>
+            <span className="text-sm">{key}</span>
+          </CollapsibleTrigger>
+
+          {isFolder && (
+            <CollapsibleContent className="ml-4 border-l pl-4">
+              {renderTree(item.__children__, indent + 1)}
+            </CollapsibleContent>
+          )}
+        </Collapsible>
       );
     });
   };
 
   return (
-    <div style={{ padding: "40px", maxWidth: "800px", margin: "auto" }}>
-      <h1 style={{ fontSize: "28px", fontWeight: "bold" }}>
-        GitHub Repo File Hierarchy Viewer
+    <div className="max-w-3xl mx-auto py-16 px-4">
+      <h1 className="text-3xl font-semibold tracking-tight mb-6 text-center">
+        GitHub Repo Explorer
       </h1>
 
-      <div style={{ marginTop: "20px", display: "flex", gap: "10px" }}>
-        <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="Enter GitHub username"
-          style={{
-            padding: "12px",
-            border: "1px solid #ccc",
-            borderRadius: "8px",
-            width: "100%",
-            fontSize: "16px",
-          }}
-        />
+      <Card className="shadow-sm border-[1.5px]">
+        <CardHeader>
+          <CardTitle className="text-xl">Search GitHub User</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-3">
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter GitHub username"
+              className="h-11"
+            />
+            <Button onClick={fetchHierarchy} className="h-11 px-6" disabled={loading}>
+              {loading ? "Fetching..." : "Search"}
+            </Button>
+          </div>
 
-        <button
-          onClick={fetchHierarchy}
-          style={{
-            padding: "12px 20px",
-            background: "black",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
-          Fetch
-        </button>
-      </div>
+          {error && <p className="text-red-500 mt-4">{error}</p>}
+        </CardContent>
+      </Card>
 
-      {loading && <p style={{ marginTop: "20px" }}>Loading…</p>}
-      {error && <p style={{ marginTop: "20px", color: "red" }}>{error}</p>}
+      {/* Repos Section */}
+      {repos && (
+        <div className="mt-10 space-y-6">
+          {Object.keys(repos).map((repoName) => (
+            <Card key={repoName} className="border-[1.5px] shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex gap-2 items-center text-lg">
+                  📦 {repoName}
+                </CardTitle>
+              </CardHeader>
 
-      {data && (
-        <div style={{ marginTop: "30px" }}>
-          {Object.keys(data).map((repoName) => (
-            <details key={repoName} style={{ marginBottom: "20px" }}>
-              <summary style={{ fontSize: "18px", fontWeight: "bold" }}>
-                📦 {repoName}
-              </summary>
-
-              <div style={{ paddingLeft: "20px", marginTop: "10px" }}>
-                {renderTree(data[repoName])}
-              </div>
-            </details>
+              <CardContent>{renderTree(repos[repoName])}</CardContent>
+            </Card>
           ))}
         </div>
+      )}
+
+      {loading && (
+        <p className="mt-6 text-center text-muted-foreground animate-pulse">
+          Fetching repo structures...
+        </p>
       )}
     </div>
   );
