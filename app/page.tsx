@@ -1,65 +1,159 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+
+type GitTreeItem = {
+  path: string;
+  type: "blob" | "tree";
+};
 
 export default function Home() {
+  const [username, setUsername] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchHierarchy = async () => {
+    if (!username.trim()) return;
+
+    setLoading(true);
+    setError(null);
+    setData(null);
+
+    try {
+      // 1. Fetch Repos
+      const reposRes = await fetch(
+        `https://api.github.com/users/${username}/repos`
+      );
+      const repos = await reposRes.json();
+
+      if (!Array.isArray(repos)) {
+        throw new Error("Invalid username");
+      }
+
+      const result: any = {};
+
+      // 2. Fetch file tree for each repo
+      for (const repo of repos) {
+        const repoName = repo.name;
+
+        const treeRes = await fetch(
+          `https://api.github.com/repos/${username}/${repoName}/git/trees/${
+            repo.default_branch || "main"
+          }?recursive=1`
+        );
+
+        const treeData = await treeRes.json();
+
+        if (!treeData.tree) continue;
+
+        const tree = treeData.tree as GitTreeItem[];
+
+        // Convert paths into nested structure
+        const root: any = {};
+
+        tree.forEach((item) => {
+          const parts = item.path.split("/");
+          let current = root;
+
+          parts.forEach((p, i) => {
+            if (!current[p]) {
+              current[p] = {
+                __type__: i === parts.length - 1 ? item.type : "tree",
+                __children__: {},
+              };
+            }
+            current = current[p].__children__;
+          });
+        });
+
+        result[repoName] = root;
+      }
+
+      setData(result);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
+    }
+
+    setLoading(false);
+  };
+
+  // Recursive Renderer
+  const renderTree = (node: any, level = 0) => {
+    return Object.keys(node).map((key) => {
+      const item = node[key];
+      const isFolder = item.__type__ === "tree";
+
+      return (
+        <div key={key} style={{ marginLeft: level * 16 }}>
+          <details>
+            <summary>
+              {isFolder ? "📁 " : "📄 "}
+              {key}
+            </summary>
+
+            {isFolder &&
+              renderTree(item.__children__, level + 1)}
+          </details>
+        </div>
+      );
+    });
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div style={{ padding: "40px", maxWidth: "800px", margin: "auto" }}>
+      <h1 style={{ fontSize: "28px", fontWeight: "bold" }}>
+        GitHub Repo File Hierarchy Viewer
+      </h1>
+
+      <div style={{ marginTop: "20px", display: "flex", gap: "10px" }}>
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Enter GitHub username"
+          style={{
+            padding: "12px",
+            border: "1px solid #ccc",
+            borderRadius: "8px",
+            width: "100%",
+            fontSize: "16px",
+          }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+
+        <button
+          onClick={fetchHierarchy}
+          style={{
+            padding: "12px 20px",
+            background: "black",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: "bold",
+          }}
+        >
+          Fetch
+        </button>
+      </div>
+
+      {loading && <p style={{ marginTop: "20px" }}>Loading…</p>}
+      {error && <p style={{ marginTop: "20px", color: "red" }}>{error}</p>}
+
+      {data && (
+        <div style={{ marginTop: "30px" }}>
+          {Object.keys(data).map((repoName) => (
+            <details key={repoName} style={{ marginBottom: "20px" }}>
+              <summary style={{ fontSize: "18px", fontWeight: "bold" }}>
+                📦 {repoName}
+              </summary>
+
+              <div style={{ paddingLeft: "20px", marginTop: "10px" }}>
+                {renderTree(data[repoName])}
+              </div>
+            </details>
+          ))}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      )}
     </div>
   );
 }
