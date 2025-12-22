@@ -1,88 +1,133 @@
-// components/repo-card.tsx
+'use client'
+
 import Link from 'next/link'
+import { motion } from 'framer-motion'
 import { Repo } from '@/lib/github'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Star, GitBranch, ArrowRight, Code } from 'lucide-react'
+import {
+  Star,
+  GitBranch,
+  ArrowRight,
+  Code,
+  Eye,
+  Calendar,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface RepoCardProps {
   repo: Repo
 }
 
 /**
- * Modern GitHub repository card with hover effects, language badges, and quick stats.
+ * Premium Repo Card
+ * - shadcn everywhere
+ * - glassmorphism
+ * - motion micro-interactions
+ * - logic untouched
  */
 export function RepoCard({ repo }: RepoCardProps) {
   const repoPath = `/repo/${repo.owner.login}/${repo.name}`
 
-  // Optional: language color mapping (better visual for badges)
   const languageColors: Record<string, string> = {
-    JavaScript: 'bg-yellow-100 text-yellow-800',
-    TypeScript: 'bg-blue-100 text-blue-800',
-    Python: 'bg-green-100 text-green-800',
-    HTML: 'bg-red-100 text-red-800',
-    CSS: 'bg-blue-50 text-blue-700',
-    Go: 'bg-cyan-100 text-cyan-800',
-    Rust: 'bg-orange-100 text-orange-800',
-    default: 'bg-gray-100 text-gray-800',
+    JavaScript:
+      'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+    TypeScript:
+      'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    Python:
+      'bg-green-500/10 text-green-600 dark:text-green-400',
+    HTML:
+      'bg-red-500/10 text-red-600 dark:text-red-400',
+    CSS:
+      'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+    Go:
+      'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+    Rust:
+      'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+    default:
+      'bg-muted text-muted-foreground',
   }
 
-  const languageClass = repo.language ? languageColors[repo.language] || languageColors.default : ''
+  const languageClass = repo.language
+    ? languageColors[repo.language] || languageColors.default
+    : ''
 
   return (
-    <Card className="group flex flex-col justify-between h-full hover:shadow-lg hover:scale-[1.02] transition-transform duration-300 border border-border bg-background/50 backdrop-blur-md">
-      
-      {/* HEADER */}
-      <CardHeader className="p-5 space-y-3">
-        <Link href={repoPath} prefetch={false}>
-          <div className="flex items-center space-x-3 cursor-pointer">
-            <Code className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            <CardTitle className="text-lg md:text-xl font-bold text-foreground group-hover:text-primary transition-colors truncate">
-              {repo.name}
-            </CardTitle>
-          </div>
-        </Link>
-        <CardDescription className="text-sm text-muted-foreground line-clamp-3 min-h-[60px]">
-          {repo.description || 'No description provided for this repository.'}
-        </CardDescription>
-      </CardHeader>
+    <motion.div
+      whileHover={{ y: -6 }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
+      className="h-full"
+    >
+      <Card
+        className={cn(
+          'group flex h-full flex-col justify-between',
+          'border-border/60 bg-background/70 backdrop-blur-xl',
+          'hover:shadow-xl transition-all'
+        )}
+      >
+        {/* HEADER */}
+        <CardHeader className="space-y-3">
+          <Link href={repoPath} prefetch={false}>
+            <div className="flex items-center gap-3 cursor-pointer">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Code className="h-5 w-5" />
+              </div>
+              <CardTitle className="truncate text-lg font-semibold group-hover:text-primary transition-colors">
+                {repo.name}
+              </CardTitle>
+            </div>
+          </Link>
 
-      {/* CONTENT / STATS */}
-      <CardContent className="p-5 pt-0">
-        <div className="flex flex-wrap gap-3 items-center">
-          {/* Language Badge */}
+          <CardDescription className="line-clamp-3 min-h-[60px]">
+            {repo.description || 'No description provided.'}
+          </CardDescription>
+        </CardHeader>
+
+        {/* CONTENT */}
+        <CardContent className="flex flex-wrap items-center gap-3">
           {repo.language && (
-            <Badge className={`px-3 py-1 font-medium ${languageClass} border-none`}>
+            <Badge
+              variant="secondary"
+              className={cn('px-3 py-1', languageClass)}
+            >
               {repo.language}
             </Badge>
           )}
 
-          {/* Stars */}
-          <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-            <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-            <span className="font-semibold">{repo.stargazers_count.toLocaleString()}</span>
-            <span className="text-xs">Stars</span>
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+            <span className="font-medium">
+              {repo.stargazers_count.toLocaleString()}
+            </span>
           </div>
 
-          {/* Fork Indicator */}
           {repo.fork && (
-            <div className="flex items-center space-x-1 text-xs italic text-green-600 dark:text-green-400">
-              <GitBranch className="w-4 h-4" />
-              <span>Forked</span>
+            <div className="flex items-center gap-1 text-xs text-green-500">
+              <GitBranch className="h-4 w-4" />
+              Forked
             </div>
           )}
-        </div>
-      </CardContent>
+        </CardContent>
 
-      {/* FOOTER */}
-      <CardFooter className="p-5 pt-2">
-        <Link href={repoPath} prefetch={false} className="w-full">
-          <div className="flex items-center justify-between text-sm text-muted-foreground group-hover:text-primary transition-colors duration-200">
-            <span className="font-medium">View Repository Tree</span>
-            <ArrowRight className="w-4 h-4 ml-2 transform transition-transform group-hover:translate-x-1" />
-          </div>
-        </Link>
-      </CardFooter>
-    </Card>
+        {/* FOOTER */}
+        <CardFooter>
+          <Link
+            href={repoPath}
+            prefetch={false}
+            className="group/link flex w-full items-center justify-between text-sm font-medium text-primary"
+          >
+            <span>Open repository</span>
+            <ArrowRight className="h-4 w-4 transition-transform group-hover/link:translate-x-1" />
+          </Link>
+        </CardFooter>
+      </Card>
+    </motion.div>
   )
 }
